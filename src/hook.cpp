@@ -11892,6 +11892,97 @@ namespace
 		return data;
 	}
 
+	void* LZ4_compress_default_ext_orig = nullptr;
+
+	int LZ4_compress_default_ext_hook(char* src, char* dst, int srcSize, int dstCapacity)
+	{
+		const int ret = reinterpret_cast<decltype(LZ4_compress_default_ext_hook)*>(LZ4_compress_default_ext_orig)(src, dst, srcSize, dstCapacity);
+
+		try
+		{
+			if (config::msgpack_notifier && config::msgpack_notifier_request)
+			{
+				notifier::notify_request(string(src, srcSize));
+			}
+
+			if (config::dump_msgpack && config::dump_msgpack_request)
+			{
+				string out_path =
+					"msgpack_dump/"s.append(to_string(current_time())).append("Q.msgpack");
+
+				DumpMsgPackFile(out_path, src, srcSize);
+			}
+
+			MsgPackData::ReadRequest(src, srcSize);
+
+#ifdef EXPERIMENTS
+			if (config::unlock_live_chara)
+			{
+				auto modified = MsgPackModify::ModifyRequest(buf, data->max_length);
+
+				if (!modified.empty())
+				{
+					data = il2cpp_array_new_type<int8_t>(il2cpp_defaults.byte_class, modified.size());
+
+					char* buf1 = reinterpret_cast<char*>(data) + kIl2CppSizeOfArray;
+					memcpy(buf1, modified.data(), modified.size());
+				}
+			}
+#endif
+		}
+		catch (...)
+		{
+		}
+
+		return ret;
+	}
+
+	void* LZ4_decompress_safe_ext_orig = nullptr;
+
+	int LZ4_decompress_safe_ext_hook(char* src, char* dst, int compressedSize, int dstCapacity)
+	{
+		const int ret = reinterpret_cast<decltype(LZ4_decompress_safe_ext_hook)*>(LZ4_decompress_safe_ext_orig)(src, dst, compressedSize, dstCapacity);
+
+		try
+		{
+			if (config::msgpack_notifier)
+			{
+				notifier::notify_response(string(dst, ret));
+			}
+
+			if (config::dump_msgpack)
+			{
+				string out_path =
+					"msgpack_dump/"s.append(to_string(current_time())).append("R.msgpack");
+
+				DumpMsgPackFile(out_path, dst, ret);
+			}
+
+			MsgPackData::ReadResponse(dst, ret);
+
+#ifdef EXPERIMENTS
+			if (config::unlock_live_chara)
+			{
+				auto modified = MsgPackModify::ModifyResponse(buf, data->max_length);
+
+				if (!modified.empty())
+				{
+					data = il2cpp_array_new_type<int8_t>(il2cpp_defaults.byte_class, modified.size());
+
+					char* buf1 = reinterpret_cast<char*>(data) + kIl2CppSizeOfArray;
+					memcpy(buf1, modified.data(), modified.size());
+				}
+			}
+#endif
+		}
+		catch (...)
+		{
+		}
+
+		return ret;
+	}
+
+
 	Il2CppObject* GetRaceManager()
 	{
 		return GetSingletonInstance(il2cpp_symbols::get_class("umamusume.dll", "Gallop", "RaceManager"));
@@ -12724,6 +12815,10 @@ namespace
 
 		auto HttpHelper_DecompressResponse_addr = il2cpp_symbols::get_method_pointer("umamusume.dll", "Gallop", "HttpHelper", "DecompressResponse", 1);
 
+		const auto libnative = GetModuleHandle(L"libnative.dll");
+		auto LZ4_compress_default_ext_addr = GetProcAddress(libnative, "LZ4_compress_default_ext");
+		auto LZ4_decompress_safe_ext_addr = GetProcAddress(libnative, "LZ4_decompress_safe_ext");
+
 		auto LiveTheaterCharaSelect_CheckSwapChara_addr = il2cpp_symbols::get_method_pointer("umamusume.dll", "Gallop", "LiveTheaterCharaSelect", "CheckSwapChara", 7);
 
 		auto load_scene_internal_addr = il2cpp_resolve_icall("UnityEngine.SceneManagement.SceneManager::LoadSceneAsyncNameIndexInternal_Injected(System.String,System.Int32,UnityEngine.SceneManagement.LoadSceneParameters&,System.bool)");
@@ -12753,8 +12848,10 @@ namespace
 		}
 		else
 		{
-			ADD_HOOK(HttpHelper_DecompressResponse, "Gallop.HttpHelper::DecompressResponse at %p\n");
-			ADD_HOOK(HttpHelper_CompressRequest, "Gallop.HttpHelper::CompressRequest at %p\n");
+			//ADD_HOOK(HttpHelper_DecompressResponse, "Gallop.HttpHelper::DecompressResponse at %p\n");
+			//ADD_HOOK(HttpHelper_CompressRequest, "Gallop.HttpHelper::CompressRequest at %p\n");
+			ADD_HOOK(LZ4_compress_default_ext, "LZ4_compress_default_ext at %p\n");
+			ADD_HOOK(LZ4_decompress_safe_ext, "LZ4_decompress_safe_ext at %p\n");
 		}
 
 		if (config::anisotropic_filtering != -1)
