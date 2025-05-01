@@ -205,39 +205,55 @@ namespace
 		UmaControllerType::ORIG
 	};
 
+	std::unordered_set<UmaControllerType> replaceTypesUnsafe{
+		UmaControllerType::Race,
+		UmaControllerType::CutIn,
+	};
+
+	std::unordered_set<UmaControllerType> replaceTypesNoSpecialChara{
+		//UmaControllerType::Training,
+		UmaControllerType::Paddock
+	};
 
 	bool g_global_char_replace_Universal = true;
 	bool enableLoadCharLog = true;
   bool g_enable_home_char_replace = true;
-  bool g_enable_global_char_replace = true;
+	bool g_enable_global_char_replace = true; //
+	bool g_enable_global_char_unsafe_replace = false; //often crashs
+	bool g_enable_global_special_chara_replace_training = false; //replace charaID>=2000 when UmaControllerType::Training, sometimes crashs
   std::unordered_map<int, std::pair<int, int>> g_home_char_replace;
   std::unordered_map<int, std::pair<int, int>> g_global_char_replace;
-  std::unordered_map<int, std::pair<int, int>> g_global_mini_char_replace;
+	std::unordered_map<int, std::pair<int, int>> g_global_mini_char_replace;
+	std::unordered_set<int> g_global_char_replace_no_race = { }; //now useless
 
-
+	int c1 = 1129;
+	int c2 = 112901;
 	bool replaceCharController(int* charaId, int* dressId, int* headId, UmaControllerType controllerType) {
-    if (g_home_char_replace.empty() && g_global_char_replace.empty() && g_global_mini_char_replace.empty()) {
-			g_global_char_replace.insert({ 1030, { 9002, 9 } });
-			g_global_char_replace.insert({ 1024, { 9002, 9 } });
-			g_global_char_replace.insert({ 1001, { 9002, 9 } });
-			g_global_char_replace.insert({ 1002, { 9002, 9 } });
-			g_global_char_replace.insert({ 1003, { 9002, 9 } });
-			g_global_char_replace.insert({ 1011, { 9002, 9 } });
-    }
+		if (g_home_char_replace.empty() && g_global_char_replace.empty() && g_global_mini_char_replace.empty()) {
+			g_global_char_replace.insert({ 1030, { c1, c2 } });
+			g_global_char_replace.insert({ 1024, { c1, c2 } });
+			g_global_char_replace.insert({ 1011, { 2005, 9 } });
+			g_global_char_replace.insert({ 1001, { 9002, 900201 } });
+			g_global_char_replace.insert({ 1002, { 2008, 200801 } });
+		}
 		bool replaceDress = true;
 		if ((*dressId < 100000) && !g_global_char_replace_Universal) {
 			replaceDress = false;
 		}
+
 
 		if (g_enable_home_char_replace && (controllerType == UmaControllerType::HomeStand)) {  // HomeStand
 			if (*charaId == 9001) {  // Can't replace this at home now.
 				return false;
 			}
 			if (g_home_char_replace.contains(*charaId)) {
+				//print all ids before and after replace
+				printf("HomeStand charaId before replace: %d dressId: %d headId: %d type: %d\n", *charaId, *dressId, *headId, int(controllerType));
 				auto* replaceChar = &g_home_char_replace.at(*charaId);
 				*charaId = replaceChar->first;
 				*dressId = replaceChar->second;
 				*headId = UmaDatabase::get_head_id_from_dress_id(*dressId);
+				printf("HomeStand charaId after replace: %d dressId: %d headId: %d\n", *charaId, *dressId, *headId);
 				return true;
 			}
 		}
@@ -263,15 +279,40 @@ namespace
 			}
 		}
 
+		if (g_enable_global_char_replace && !otherReplaceTypes.contains(controllerType))
+		{
+			printf("not replace chara because controllerType=%d \n", int(controllerType));
+		}
 		if (g_enable_global_char_replace && otherReplaceTypes.contains(controllerType)) {
 			if ((*charaId == 9001) && (controllerType == UmaControllerType::HomeStand)) {  // Can't replace this at home now.
 				return false;
 			}
+
 			if (g_global_char_replace.contains(*charaId)) {
+				//print all ids before and after replace
+				printf("charaId before replace: %d dressId: %d headId: %d type: %d\n", *charaId, *dressId, *headId, int(controllerType));
 				auto* replaceChar = &g_global_char_replace.at(*charaId);
+				if ((!g_enable_global_char_unsafe_replace))
+				{
+					if (replaceTypesUnsafe.contains(controllerType) || (g_global_char_replace_no_race.contains(replaceChar->first) && replaceTypesNoSpecialChara.contains(controllerType)))
+					{
+						printf("chara will not be replaced because of unsafe: charaId: %d type: %d\n", replaceChar->first, int(controllerType));
+						return false;
+					}
+				}
+				if ((!g_enable_global_special_chara_replace_training) && controllerType == UmaControllerType::Training)
+				{
+					if (replaceChar->first >= 2000) //not trainable charas
+					{
+						printf("chara will not be replaced because this chara cannot train: charaId: %d type: %d\n", replaceChar->first, int(controllerType));
+						return false;
+					}
+				}
+
 				*charaId = replaceChar->first;
 				if (replaceDress) *dressId = replaceChar->second;
 				*headId = UmaDatabase::get_head_id_from_dress_id(*dressId);
+				printf("charaId after replace: %d dressId: %d headId: %d\n", *charaId, *dressId, *headId);
 				return true;
 			}
 		}
@@ -293,6 +334,12 @@ namespace
 	}
 
 
+	//void* RaceModelController_GetOverRunFinishOrderCategoryMotion_orig;
+	//int RaceModelController_GetOverRunFinishOrderCategoryMotion_hook(int charaId, int finishOrder, bool isStoryRace, bool isPlayer) {
+	//	printf("RaceModelController_GetOverRunFinishOrderCategoryMotion_hook %d %d\n", charaId, finishOrder);
+	//	return reinterpret_cast<decltype(RaceModelController_GetOverRunFinishOrderCategoryMotion_hook)*>(RaceModelController_GetOverRunFinishOrderCategoryMotion_orig)(
+	//		charaId, finishOrder, isStoryRace, isPlayer);
+	//}
 
 
 
@@ -11006,6 +11053,7 @@ namespace
 	void GallopUtil_GotoTitleOnError_hook(Il2CppString* text)
 	{
 		// Bypass SoftwareReset
+		return;
 		auto okText = GetTextIdByName(L"Common0009");
 		auto errorText = GetTextIdByName(L"Common0071");
 
@@ -13117,6 +13165,12 @@ namespace
 				"EditableCharacterBuildInfo", ".ctor", 11
 			);
 
+		//auto RaceModelController_GetOverRunFinishOrderCategoryMotion_addr =
+		//	il2cpp_symbols::get_method_pointer(
+		//		"umamusume.dll", "Gallop",
+		//		"RaceModelController", "GetOverRunFinishOrderCategoryMotion", 4
+		//	);
+		
 #pragma endregion
 
 		ADD_HOOK(Certification_initDmmPlatformData, "Gallop.Certification::initDmmPlatformData at %p\n");
@@ -13133,7 +13187,7 @@ namespace
 
 		// ADD_HOOK(DialogCommon_Close, "Gallop.DialogCommon.Close() at %p\n");
 
-		// ADD_HOOK(GallopUtil_GotoTitleOnError, "Gallop.GallopUtil.GotoTitleOnError() at %p\n");
+		ADD_HOOK(GallopUtil_GotoTitleOnError, "Gallop.GallopUtil.GotoTitleOnError() at %p\n");
 
 		if (Game::CurrentGameRegion == Game::Region::KOR)
 		{
@@ -13206,6 +13260,8 @@ namespace
 		// ADD_HOOK(CharacterBg_Setup, "CharacterBg_Setup at %p\n");
 		ADD_HOOK(StoryCharacter3D_LoadModel, "StoryCharacter3D_LoadModel at %p\n");
 		ADD_HOOK(SingleModeSceneController_CreateModel, "SingleModeSceneController_CreateModel at %p\n");
+		//ADD_HOOK(RaceModelController_GetOverRunFinishOrderCategoryMotion, "RaceModelController_GetOverRunFinishOrderCategoryMotion at %p\n");
+		
 
 		if (!config::replace_text_db_path.empty())
 		{
