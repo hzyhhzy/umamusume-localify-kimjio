@@ -79,6 +79,17 @@ struct Il2CppDelegate_t
 	bool method_is_virtual;
 };
 
+template <typename T>
+struct TypedField
+{
+	FieldInfo* Field;
+
+	constexpr FieldInfo* operator->() const noexcept
+	{
+		return Field;
+	}
+};
+
 #define DO_API(r, n, p) extern r (*n) p
 #include "il2cpp-api-functions.h"
 #undef DO_API
@@ -157,6 +168,79 @@ namespace il2cpp_symbols
 	{
 		return reinterpret_cast<const MethodInfo_t<T>*>(get_method(assemblyName, namespaze, klassName, name, argsCount));
 	}
+
+	FieldInfo* get_field(const char* assemblyName, const char* namespaze,
+		const char* klassName, const char* name);
+
+	template <typename T>
+	TypedField<T> get_field(const char* assemblyName, const char* namespaze,
+		const char* klassName, const char* name)
+	{
+		return { get_field(assemblyName, namespaze, klassName, name) };
+	}
+
+	Il2CppClass* get_class_from_instance(const void* instance);
+
+	template <typename T = void*> requires std::is_trivial_v<T>
+	T read_field(const void* ptr, const FieldInfo* field)
+	{
+		T result;
+		const auto fieldPtr = static_cast<const std::byte*>(ptr) + field->offset;
+		std::memcpy(std::addressof(result), fieldPtr, sizeof(T));
+		return result;
+	}
+
+	template <typename T>
+	T read_field(const void* ptr, TypedField<T> field)
+	{
+		return read_field<T>(ptr, field.Field);
+	}
+
+	template <typename T> requires std::is_trivial_v<T>
+	void write_field(void* ptr, const FieldInfo* field, const T& value)
+	{
+		const auto fieldPtr = static_cast<std::byte*>(ptr) + field->offset;
+		std::memcpy(fieldPtr, std::addressof(value), sizeof(T));
+	}
+
+	template <typename T, typename U>
+	void write_field(void* ptr, TypedField<T> field, U&& value)
+	{
+		write_field<T>(ptr, field.Field, static_cast<T>(std::forward<U>(value)));
+	}
+
+	template <typename T = void*>
+	void iterate_list(const void* list, std::invocable<int32_t, T> auto&& receiver)
+	{
+		const auto listClass = get_class_from_instance(list);
+		const auto getItemMethod = reinterpret_cast<T(*)(const void*, int32_t)>(il2cpp_class_get_method_from_name(listClass, "get_Item", 1)->methodPointer);
+		const auto getCountMethod = reinterpret_cast<int32_t(*)(const void*)>(il2cpp_class_get_method_from_name(listClass, "get_Count", 0)->methodPointer);
+
+		const auto count = getCountMethod(list);
+		for (int32_t i = 0; i < count; ++i)
+		{
+			static_cast<decltype(receiver)>(receiver)(i, getItemMethod(list, i));
+		}
+	}
+
+	template <typename T = void*>
+	void iterate_IEnumerable(const void* obj, std::invocable<T> auto&& receiver)
+	{
+		const auto klass = get_class_from_instance(obj);
+		const auto getEnumeratorMethod = reinterpret_cast<void* (*)(const void*)>(il2cpp_class_get_method_from_name(klass, "GetEnumerator", 0)->methodPointer);
+		const auto enumerator = getEnumeratorMethod(obj);
+		const auto enumeratorClass = get_class_from_instance(enumerator);
+		const auto getCurrentMethod = reinterpret_cast<T(*)(void*)>(il2cpp_class_get_method_from_name(enumeratorClass, "get_Current", 0)->methodPointer);
+		const auto moveNextMethod = reinterpret_cast<bool(*)(void*)>(il2cpp_class_get_method_from_name(enumeratorClass, "MoveNext", 0)->methodPointer);
+
+		while (moveNextMethod(enumerator))
+		{
+			static_cast<decltype(receiver)>(receiver)(getCurrentMethod(enumerator));
+		}
+	}
+
+	Il2CppString* NewWStr(std::wstring_view str);
+
 
 	const Il2CppClass* find_class(const char* assemblyName, const char* namespaze,
 		const std::function<bool(const Il2CppClass*)>& predict);

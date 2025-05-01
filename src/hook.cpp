@@ -10,6 +10,7 @@
 #include <array>
 
 #include <algorithm>
+#include <unordered_set>
 
 #include <chrono>
 
@@ -119,6 +120,7 @@
 #include "fpp/fpp.h"
 
 #include "string_utils.hpp"
+#include "umadb/umadb.hpp"
 
 using namespace std;
 
@@ -165,6 +167,258 @@ namespace
 
 		}
 		printf("\n\n");
+	}
+
+	enum class UmaControllerType {
+		Default = 0x0,
+		Race = 0x1,
+		Training = 0x2,
+		EventTimeline = 0x3,
+		Live = 0x4,
+		LiveTheater = 0x5,
+		HomeStand = 0x6,
+		HomeTalk = 0x7,
+		HomeWalk = 0x8,
+		CutIn = 0x9,
+		TrainingTop = 0xa,
+		SingleRace = 0xb,
+		Simple = 0xc,
+		Mini = 0xd,
+		Paddock = 0xe,
+		Champions = 0xf,
+		ORIG = 0x1919810
+	};
+
+	std::unordered_set<UmaControllerType> otherReplaceTypes{
+		UmaControllerType::Training,
+		UmaControllerType::EventTimeline,
+		UmaControllerType::Live,
+		UmaControllerType::LiveTheater,
+		UmaControllerType::HomeStand,
+		UmaControllerType::TrainingTop,
+		UmaControllerType::Simple,
+		UmaControllerType::Champions,
+		UmaControllerType::SingleRace,
+		UmaControllerType::CutIn,
+		UmaControllerType::Race,
+		UmaControllerType::Paddock,
+		UmaControllerType::ORIG
+	};
+
+
+	bool g_global_char_replace_Universal = true;
+	bool enableLoadCharLog = true;
+  bool g_enable_home_char_replace = true;
+  bool g_enable_global_char_replace = true;
+  std::unordered_map<int, std::pair<int, int>> g_home_char_replace;
+  std::unordered_map<int, std::pair<int, int>> g_global_char_replace;
+  std::unordered_map<int, std::pair<int, int>> g_global_mini_char_replace;
+
+
+	bool replaceCharController(int* charaId, int* dressId, int* headId, UmaControllerType controllerType) {
+    if (g_home_char_replace.empty() && g_global_char_replace.empty() && g_global_mini_char_replace.empty()) {
+			g_global_char_replace.insert({ 1030, { 9002, 9 } });
+			g_global_char_replace.insert({ 1024, { 9002, 9 } });
+			g_global_char_replace.insert({ 1001, { 9002, 9 } });
+			g_global_char_replace.insert({ 1002, { 9002, 9 } });
+			g_global_char_replace.insert({ 1003, { 9002, 9 } });
+			g_global_char_replace.insert({ 1011, { 9002, 9 } });
+    }
+		bool replaceDress = true;
+		if ((*dressId < 100000) && !g_global_char_replace_Universal) {
+			replaceDress = false;
+		}
+
+		if (g_enable_home_char_replace && (controllerType == UmaControllerType::HomeStand)) {  // HomeStand
+			if (*charaId == 9001) {  // Can't replace this at home now.
+				return false;
+			}
+			if (g_home_char_replace.contains(*charaId)) {
+				auto* replaceChar = &g_home_char_replace.at(*charaId);
+				*charaId = replaceChar->first;
+				*dressId = replaceChar->second;
+				*headId = UmaDatabase::get_head_id_from_dress_id(*dressId);
+				return true;
+			}
+		}
+
+		if (g_enable_global_char_replace && (controllerType == UmaControllerType::Mini)) {  // mini
+			if (g_global_mini_char_replace.contains(*charaId)) {
+				auto* replaceChar = &g_global_mini_char_replace.at(*charaId);
+				if (UmaDatabase::get_dress_have_mini(replaceChar->second)) {
+					*charaId = replaceChar->first;
+					if (replaceDress) *dressId = replaceChar->second;
+					*headId = UmaDatabase::get_head_id_from_dress_id(*dressId);
+					return true;
+				}
+				else {
+					printf("dressId: %d does not have mini character!\n", replaceChar->second);
+					return false;
+				}
+			}
+			if (!UmaDatabase::get_dress_have_mini(*dressId)) {
+				printf("dressId: %d does not have mini character! Replace to 2.\n", *dressId);
+				*dressId = 2;
+				return true;
+			}
+		}
+
+		if (g_enable_global_char_replace && otherReplaceTypes.contains(controllerType)) {
+			if ((*charaId == 9001) && (controllerType == UmaControllerType::HomeStand)) {  // Can't replace this at home now.
+				return false;
+			}
+			if (g_global_char_replace.contains(*charaId)) {
+				auto* replaceChar = &g_global_char_replace.at(*charaId);
+				*charaId = replaceChar->first;
+				if (replaceDress) *dressId = replaceChar->second;
+				*headId = UmaDatabase::get_head_id_from_dress_id(*dressId);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool replaceCharController(int* cardId, int* charaId, int* dressId, int* headId, UmaControllerType controllerType) {
+		if (otherReplaceTypes.contains(controllerType)) {
+			if (replaceCharController(charaId, dressId, headId, controllerType)) {
+				if (*cardId >= 1000) {
+					if ((*cardId / 100) != *charaId) {
+						*cardId = *charaId * 100 + 1;
+					}
+				}
+				return true;
+			}
+		}
+		return false;
+	}
+
+
+
+
+
+	void* StoryCharacter3D_LoadModel_orig;
+	void StoryCharacter3D_LoadModel_hook(int charaId, int cardId, int clothId, int zekkenNumber, int headId, bool isWet,
+		bool isDirt, int mobId, int dressColorId, int charaDressColorSetId, Il2CppString* zekkenName, int zekkenFontStyle, int color, int fontColor,
+		int suitColor, bool isUseDressDataHeadModelSubId, bool useCircleShadow) {
+
+		if (enableLoadCharLog) printf("StoryCharacter3D_LoadModel CardId: %d charaId: %d DressId: %d DressColorId: %d HeadId: %d MobId: %d ZekkenNumber: %d\n",
+			cardId, charaId, clothId, dressColorId, headId, mobId, zekkenNumber);
+
+		replaceCharController(&cardId, &charaId, &clothId, &headId, UmaControllerType::ORIG);
+
+		return reinterpret_cast<decltype(StoryCharacter3D_LoadModel_hook)*>(StoryCharacter3D_LoadModel_orig)(
+			charaId, cardId, clothId, zekkenNumber, headId, isWet,
+			isDirt, mobId, dressColorId, charaDressColorSetId, zekkenName, zekkenFontStyle, color, fontColor,
+			suitColor, isUseDressDataHeadModelSubId, useCircleShadow);
+	}
+
+	void* CharacterBuildInfo_ctor_0_orig;
+	void CharacterBuildInfo_ctor_0_hook(void* _this, int charaId, int dressId, int controllerType, int headId,
+		int zekken, int mobId, int backDancerColorId, bool isUseDressDataHeadModelSubId, int audienceId,
+		int motionDressId, bool isEnableModelCache)
+	{
+		if (enableLoadCharLog) printf("CharacterBuildInfo_ctor_0 charaId: %d, dressId: %d, headId: %d, controllerType: 0x%x\n", charaId, dressId, headId, controllerType);
+		replaceCharController(&charaId, &dressId, &headId, (UmaControllerType)controllerType);
+		return reinterpret_cast<decltype(CharacterBuildInfo_ctor_0_hook)*>(CharacterBuildInfo_ctor_0_orig)(_this, charaId, dressId, controllerType, headId, zekken, mobId, backDancerColorId, isUseDressDataHeadModelSubId, audienceId, motionDressId, isEnableModelCache);
+	}
+
+	void* CharacterBuildInfo_ctor_1_orig;
+	void CharacterBuildInfo_ctor_1_hook(void* _this, int cardId, int charaId, int dressId, int controllerType,
+		int headId, int zekken, int mobId, int backDancerColorId, int overrideClothCategory,
+		bool isUseDressDataHeadModelSubId, int audienceId, int motionDressId, bool isEnableModelCache, int charaDressColorSetId)
+	{
+		if (enableLoadCharLog) printf("CharacterBuildInfo_ctor_1 cardId: %d, charaId: %d, dressId: %d, headId: %d, audienceId: %d, motionDressId: %d, controllerType: 0x%x\n", cardId, charaId, dressId, headId, audienceId, motionDressId, controllerType);
+		replaceCharController(&charaId, &dressId, &headId, (UmaControllerType)controllerType);
+		return reinterpret_cast<decltype(CharacterBuildInfo_ctor_1_hook)*>(CharacterBuildInfo_ctor_1_orig)(_this, cardId, charaId, dressId, controllerType, headId, zekken, mobId, backDancerColorId, overrideClothCategory, isUseDressDataHeadModelSubId, audienceId, motionDressId, isEnableModelCache, charaDressColorSetId);
+	}
+
+
+	void* SingleModeSceneController_CreateModel_orig;
+	void* SingleModeSceneController_CreateModel_hook(void* _this, int cardId, int dressId, bool addVoiceCue) {
+		if (enableLoadCharLog) printf("SingleModeSceneController_CreateModel cardId: %d, dressId: %d\n", cardId, dressId);
+		return reinterpret_cast<decltype(SingleModeSceneController_CreateModel_hook)*>(SingleModeSceneController_CreateModel_orig)(
+			_this, cardId, dressId, addVoiceCue);
+	}
+
+	void* CharacterBuildInfo_Rebuild_orig;
+	void CharacterBuildInfo_Rebuild_hook(void* _this) {
+		static Il2CppClass* this_klass = il2cpp_symbols::get_class_from_instance(_this);
+		static FieldInfo* cardIdField = il2cpp_class_get_field_from_name(this_klass, "_cardId");
+		static FieldInfo* charaIdField = il2cpp_class_get_field_from_name(this_klass, "_charaId");
+		static FieldInfo* dressIdField = il2cpp_class_get_field_from_name(this_klass, "_dressId");
+		static FieldInfo* controllerTypeField = il2cpp_class_get_field_from_name(this_klass, "_controllerType");
+		static FieldInfo* headModelSubIdField = il2cpp_class_get_field_from_name(this_klass, "_headModelSubId");
+		static FieldInfo* motionDressIdField = il2cpp_class_get_field_from_name(this_klass, "_motionDressId");
+		/*
+		static FieldInfo* zekkenField = il2cpp_class_get_field_from_name(this_klass, "_zekken");
+		static FieldInfo* mobIdField = il2cpp_class_get_field_from_name(this_klass, "_mobId");
+		static FieldInfo* audienceIdField = il2cpp_class_get_field_from_name(this_klass, "_audienceId");
+		static FieldInfo* isEnableModelCacheField = il2cpp_class_get_field_from_name(this_klass, "_isEnableModelCache");
+		FieldInfo* overrideClothCategoryField = il2cpp_class_get_field_from_name(this_klass, "_overrideClothCategory");
+		FieldInfo* backDancerColorIdField = il2cpp_class_get_field_from_name(this_klass, "_backDancerColorId");
+		FieldInfo* isUseDressDataHeadModelSubIdField = il2cpp_class_get_field_from_name(this_klass, "_isUseDressDataHeadModelSubId");
+		FieldInfo* isEnableModelCacheField = il2cpp_class_get_field_from_name(this_klass, "_isEnableModelCache");
+		*/
+
+		auto charaId = il2cpp_symbols::read_field<int>(_this, charaIdField);
+		auto cardId = il2cpp_symbols::read_field<int>(_this, cardIdField);
+		auto dressId = il2cpp_symbols::read_field<int>(_this, dressIdField);
+		auto controllerType = il2cpp_symbols::read_field<int>(_this, controllerTypeField);
+		auto headModelSub = il2cpp_symbols::read_field<int>(_this, headModelSubIdField);
+
+		/*
+		auto zekken = il2cpp_symbols::read_field<int>(_this, zekkenField);
+		auto mobId = il2cpp_symbols::read_field<int>(_this, mobIdField);
+		auto audienceId = il2cpp_symbols::read_field<int>(_this, audienceIdField);
+		auto isEnableModelCache = il2cpp_symbols::read_field<bool>(_this, isEnableModelCacheField);
+		auto overrideClothCategory = il2cpp_symbols::read_field<int>(_this, overrideClothCategoryField);
+		auto backDancerColorId = il2cpp_symbols::read_field<int>(_this, backDancerColorIdField);
+		auto isUseDressDataHeadModelSubId = il2cpp_symbols::read_field<bool>(_this, isUseDressDataHeadModelSubIdField);
+		auto motionDressId = il2cpp_symbols::read_field<int>(_this, motionDressIdField);
+		auto isEnableModelCache = il2cpp_symbols::read_field<bool>(_this, isEnableModelCacheField);
+		*/
+
+		// printf("ReBuild charaId: %d (%d), card: %d, head: %d, controllerType: 0x%x, zekken: %d, mobId: %d, audienceId: %d, isEnableModelCache: %d\n", charaId,
+		//	dressId, cardId, headModelSub, controllerType, zekken, mobId, audienceId, isEnableModelCache);
+		if (replaceCharController(&charaId, &dressId, &headModelSub, (UmaControllerType)controllerType)) {
+			il2cpp_symbols::write_field(_this, charaIdField, charaId);
+			il2cpp_symbols::write_field(_this, dressIdField, dressId);
+			il2cpp_symbols::write_field(_this, headModelSubIdField, headModelSub);
+			il2cpp_symbols::write_field(_this, motionDressIdField, dressId);
+			il2cpp_symbols::write_field(_this, cardIdField, -1);
+		}
+
+		reinterpret_cast<decltype(CharacterBuildInfo_Rebuild_hook)*>(CharacterBuildInfo_Rebuild_orig)(_this);
+	}
+
+	void* GetRaceDressId_orig;
+	int GetRaceDressId_hook(void* _this, bool isApplyDressChange) {
+		auto ret = reinterpret_cast<decltype(GetRaceDressId_hook)*>(GetRaceDressId_orig)(_this, false);
+		// printf("GetRaceDressId: %d, applyChange: %d\n", ret, isApplyDressChange);
+		if (g_enable_global_char_replace) {
+			if ((ret > 100000) && (ret <= 999999)) {
+				int charaId;
+				if (ret / 10000 == 90) {
+					charaId = ret % 10000;
+				}
+				else {
+					charaId = ret / 100;
+				}
+				int newDressId = ret;
+				int newHeadId = 0;
+				if (replaceCharController(&charaId, &newDressId, &newHeadId, UmaControllerType::ORIG)) {
+					return newDressId;
+				}
+			}
+		}
+		return ret;
+	}
+
+	void* EditableCharacterBuildInfo_ctor_orig;
+	void EditableCharacterBuildInfo_ctor_hook(void* _this, int cardId, int charaId, int dressId, int controllerType, int zekken, int mobId, int backDancerColorId, int headId, bool isUseDressDataHeadModelSubId, bool isEnableModelCache, int chara_dress_color_set_id) {
+		if (enableLoadCharLog) printf("EditableCharacterBuildInfo_ctor cardId: %d, charaId: %d, dressId: %d, headId: %d, controllerType: 0x%x\n", cardId, charaId, dressId, headId, controllerType);
+		replaceCharController(&cardId, &charaId, &dressId, &headId, (UmaControllerType)controllerType);
+		return reinterpret_cast<decltype(EditableCharacterBuildInfo_ctor_hook)*>(EditableCharacterBuildInfo_ctor_orig)(_this, cardId, charaId, dressId, controllerType, zekken, mobId, backDancerColorId, headId, isUseDressDataHeadModelSubId, isEnableModelCache, chara_dress_color_set_id);
 	}
 
 	void* InitializeApplication_orig = nullptr;
@@ -12823,6 +13077,46 @@ namespace
 
 		auto load_scene_internal_addr = il2cpp_resolve_icall("UnityEngine.SceneManagement.SceneManager::LoadSceneAsyncNameIndexInternal_Injected(System.String,System.Int32,UnityEngine.SceneManagement.LoadSceneParameters&,System.bool)");
 
+		auto StoryCharacter3D_LoadModel_addr = il2cpp_symbols::get_method_pointer(
+			"umamusume.dll", "Gallop",
+			"StoryCharacter3D", "LoadModel", 17
+		);
+
+		auto SingleModeSceneController_CreateModel_addr = il2cpp_symbols::get_method_pointer(
+			"umamusume.dll", "Gallop",
+			"SingleModeSceneController", "CreateModel", 3
+		);
+
+		auto CharacterBuildInfo_ctor_0_addr =
+			il2cpp_symbols::get_method_pointer(
+				"umamusume.dll", "Gallop",
+				"CharacterBuildInfo", ".ctor", 11
+			);
+
+		auto CharacterBuildInfo_ctor_1_addr =
+			il2cpp_symbols::get_method_pointer(
+				"umamusume.dll", "Gallop",
+				"CharacterBuildInfo", ".ctor", 14
+			);
+
+		auto CharacterBuildInfo_Rebuild_addr =
+			il2cpp_symbols::get_method_pointer(
+				"umamusume.dll", "Gallop",
+				"CharacterBuildInfo", "Rebuild", 0
+			);
+
+		auto GetRaceDressId_addr =
+			il2cpp_symbols::get_method_pointer(
+				"umamusume.dll", "Gallop",
+				"WorkSingleModeCharaData", "GetRaceDressId", 1
+			);
+
+		auto EditableCharacterBuildInfo_ctor_addr =
+			il2cpp_symbols::get_method_pointer(
+				"umamusume.dll", "Gallop",
+				"EditableCharacterBuildInfo", ".ctor", 11
+			);
+
 #pragma endregion
 
 		ADD_HOOK(Certification_initDmmPlatformData, "Gallop.Certification::initDmmPlatformData at %p\n");
@@ -12903,6 +13197,15 @@ namespace
 		ADD_HOOK(get_modified_string, "GallopUtil_GetModifiedString at %p\n");
 
 		ADD_HOOK(update, "DG.Tweening.Core.TweenManager::Update at %p\n");
+
+		// ADD_HOOK(CharacterBuildInfo_ctor_0, "CharacterBuildInfo_ctor_0 at %p\n");
+		// ADD_HOOK(CharacterBuildInfo_ctor_1, "CharacterBuildInfo_ctor_1 at %p\n");
+		// ADD_HOOK(EditableCharacterBuildInfo_ctor, "EditableCharacterBuildInfo_ctor at %p\n");
+		ADD_HOOK(CharacterBuildInfo_Rebuild, "CharacterBuildInfo_Rebuild at %p\n");  // 上面三个改成 Rebuild
+		ADD_HOOK(GetRaceDressId, "GetRaceDressId at %p\n");
+		// ADD_HOOK(CharacterBg_Setup, "CharacterBg_Setup at %p\n");
+		ADD_HOOK(StoryCharacter3D_LoadModel, "StoryCharacter3D_LoadModel at %p\n");
+		ADD_HOOK(SingleModeSceneController_CreateModel, "SingleModeSceneController_CreateModel at %p\n");
 
 		if (!config::replace_text_db_path.empty())
 		{

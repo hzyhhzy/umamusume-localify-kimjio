@@ -1,6 +1,18 @@
 # umamusume-localify
 ## Uma Musume: Pretty Derby localify patch
 
+# 编译
+运行generate.bat
+提示缺两个nuget包，随便找个项目在vs里面安装这两个包，即可
+visual studio需要安装clang，安装程序里面搜clang和llvm，安装两个东西
+
+安装sqlite3
+https://www.sqlite.org/download.html
+放到deps文件夹，依赖目录加上这个，把两个c文件加到解决方案里
+nuget里安装boost
+
+
+
 
 [한국어](README.ko-KR.md)
 [中国人](README.zh-Hans.md)

@@ -1,5 +1,7 @@
 ### Windows
 
+deps/cpp-httplib
+
 # Windows image file caches
 Thumbs.db
 ehthumbs.db

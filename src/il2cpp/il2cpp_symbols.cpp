@@ -439,6 +439,21 @@ namespace il2cpp_symbols
 		return nullptr;
 	}
 
+	FieldInfo* get_field(const char* assemblyName, const char* namespaze,
+		const char* klassName, const char* name)
+	{
+		const auto assembly = il2cpp_domain_assembly_open(il2cpp_domain, assemblyName);
+		const auto image = il2cpp_assembly_get_image(assembly);
+		const auto klass = il2cpp_class_from_name(image, namespaze, klassName);
+
+		return il2cpp_class_get_field_from_name(klass, name);
+	}
+
+	Il2CppClass* get_class_from_instance(const void* instance)
+	{
+		return *static_cast<Il2CppClass* const*>(std::assume_aligned<alignof(void*)>(instance));
+	}
+
 	Il2CppMethodPointer get_method_pointer(const char* assemblyName, const char* namespaze,
 		const char* klassName, const char* name, int argsCount)
 	{
