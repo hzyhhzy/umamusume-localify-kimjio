@@ -215,41 +215,35 @@ namespace
 		UmaControllerType::Paddock
 	};
 
-	bool g_global_char_replace_Universal = true;
-	bool enableLoadCharLog = true;
-  bool g_enable_home_char_replace = true;
-	bool g_enable_global_char_replace = true; //
-	bool g_enable_global_char_unsafe_replace = false; //often crashs
-	bool g_enable_global_special_chara_replace_training = false; //replace charaID>=2000 when UmaControllerType::Training, sometimes crashs
-  std::unordered_map<int, std::pair<int, int>> g_home_char_replace;
-  std::unordered_map<int, std::pair<int, int>> g_global_char_replace;
-	std::unordered_map<int, std::pair<int, int>> g_global_mini_char_replace;
-	std::unordered_set<int> g_global_char_replace_no_race = { }; //now useless
+	//bool g_global_char_replace_Universal = true;
+	//bool enableLoadCharLog = true;
+  //bool g_enable_home_char_replace = true;
+	//bool g_enable_global_char_replace = true; //
+	//bool g_enable_global_char_unsafe_replace = false; //often crashs
+	//bool g_enable_global_special_chara_replace_training = false; //replace charaID>=2000 when UmaControllerType::Training, sometimes crashs
+  //std::unordered_map<int, std::pair<int, int>> g_home_char_replace;
+  //std::unordered_map<int, std::pair<int, int>> g_global_char_replace;
+	//std::unordered_map<int, std::pair<int, int>> g_global_mini_char_replace;
+	//std::unordered_set<int> g_global_char_replace_no_race = { }; //now useless
 
-	int c1 = 1129;
-	int c2 = 112901;
+	int c1 = 2003;
+	int c2 = 200301;
 	bool replaceCharController(int* charaId, int* dressId, int* headId, UmaControllerType controllerType) {
-		if (g_home_char_replace.empty() && g_global_char_replace.empty() && g_global_mini_char_replace.empty()) {
-			g_global_char_replace.insert({ 1030, { c1, c2 } });
-			g_global_char_replace.insert({ 1024, { c1, c2 } });
-			g_global_char_replace.insert({ 1011, { 2005, 9 } });
-			g_global_char_replace.insert({ 1001, { 9002, 900201 } });
-			g_global_char_replace.insert({ 1002, { 2008, 200801 } });
-		}
+		
 		bool replaceDress = true;
-		if ((*dressId < 100000) && !g_global_char_replace_Universal) {
+		if ((*dressId < 100000) && !config::g_global_char_replace_Universal) {
 			replaceDress = false;
 		}
 
 
-		if (g_enable_home_char_replace && (controllerType == UmaControllerType::HomeStand)) {  // HomeStand
+		if (config::g_enable_home_char_replace && (controllerType == UmaControllerType::HomeStand)) {  // HomeStand
 			if (*charaId == 9001) {  // Can't replace this at home now.
 				return false;
 			}
-			if (g_home_char_replace.contains(*charaId)) {
+			if (config::g_home_char_replace.contains(*charaId)) {
 				//print all ids before and after replace
 				printf("HomeStand charaId before replace: %d dressId: %d headId: %d type: %d\n", *charaId, *dressId, *headId, int(controllerType));
-				auto* replaceChar = &g_home_char_replace.at(*charaId);
+				auto* replaceChar = &config::g_home_char_replace.at(*charaId);
 				*charaId = replaceChar->first;
 				*dressId = replaceChar->second;
 				*headId = UmaDatabase::get_head_id_from_dress_id(*dressId);
@@ -258,9 +252,9 @@ namespace
 			}
 		}
 
-		if (g_enable_global_char_replace && (controllerType == UmaControllerType::Mini)) {  // mini
-			if (g_global_mini_char_replace.contains(*charaId)) {
-				auto* replaceChar = &g_global_mini_char_replace.at(*charaId);
+		if (config::g_enable_global_char_replace && (controllerType == UmaControllerType::Mini)) {  // mini
+			if (config::g_global_mini_char_replace.contains(*charaId)) {
+				auto* replaceChar = &config::g_global_mini_char_replace.at(*charaId);
 				if (UmaDatabase::get_dress_have_mini(replaceChar->second)) {
 					*charaId = replaceChar->first;
 					if (replaceDress) *dressId = replaceChar->second;
@@ -279,28 +273,28 @@ namespace
 			}
 		}
 
-		if (g_enable_global_char_replace && !otherReplaceTypes.contains(controllerType))
-		{
-			printf("not replace chara because controllerType=%d \n", int(controllerType));
-		}
-		if (g_enable_global_char_replace && otherReplaceTypes.contains(controllerType)) {
+		//if (g_enable_global_char_replace && !otherReplaceTypes.contains(controllerType))
+		//{
+		//	printf("not replace chara because controllerType=%d \n", int(controllerType));
+		//}
+		if (config::g_enable_global_char_replace && otherReplaceTypes.contains(controllerType)) {
 			if ((*charaId == 9001) && (controllerType == UmaControllerType::HomeStand)) {  // Can't replace this at home now.
 				return false;
 			}
 
-			if (g_global_char_replace.contains(*charaId)) {
+			if (config::g_global_char_replace.contains(*charaId)) {
 				//print all ids before and after replace
 				printf("charaId before replace: %d dressId: %d headId: %d type: %d\n", *charaId, *dressId, *headId, int(controllerType));
-				auto* replaceChar = &g_global_char_replace.at(*charaId);
-				if ((!g_enable_global_char_unsafe_replace))
+				auto* replaceChar = &config::g_global_char_replace.at(*charaId);
+				if ((!config::g_enable_global_char_unsafe_replace))
 				{
-					if (replaceTypesUnsafe.contains(controllerType) || (g_global_char_replace_no_race.contains(replaceChar->first) && replaceTypesNoSpecialChara.contains(controllerType)))
+					if (replaceTypesUnsafe.contains(controllerType) )
 					{
 						printf("chara will not be replaced because of unsafe: charaId: %d type: %d\n", replaceChar->first, int(controllerType));
 						return false;
 					}
 				}
-				if ((!g_enable_global_special_chara_replace_training) && controllerType == UmaControllerType::Training)
+				if ((!config::g_enable_global_special_chara_replace_training) && controllerType == UmaControllerType::Training)
 				{
 					if (replaceChar->first >= 2000) //not trainable charas
 					{
@@ -348,7 +342,7 @@ namespace
 		bool isDirt, int mobId, int dressColorId, int charaDressColorSetId, Il2CppString* zekkenName, int zekkenFontStyle, int color, int fontColor,
 		int suitColor, bool isUseDressDataHeadModelSubId, bool useCircleShadow) {
 
-		if (enableLoadCharLog) printf("StoryCharacter3D_LoadModel CardId: %d charaId: %d DressId: %d DressColorId: %d HeadId: %d MobId: %d ZekkenNumber: %d\n",
+		printf("StoryCharacter3D_LoadModel CardId: %d charaId: %d DressId: %d DressColorId: %d HeadId: %d MobId: %d ZekkenNumber: %d\n",
 			cardId, charaId, clothId, dressColorId, headId, mobId, zekkenNumber);
 
 		replaceCharController(&cardId, &charaId, &clothId, &headId, UmaControllerType::ORIG);
@@ -364,7 +358,7 @@ namespace
 		int zekken, int mobId, int backDancerColorId, bool isUseDressDataHeadModelSubId, int audienceId,
 		int motionDressId, bool isEnableModelCache)
 	{
-		if (enableLoadCharLog) printf("CharacterBuildInfo_ctor_0 charaId: %d, dressId: %d, headId: %d, controllerType: 0x%x\n", charaId, dressId, headId, controllerType);
+		printf("CharacterBuildInfo_ctor_0 charaId: %d, dressId: %d, headId: %d, controllerType: 0x%x\n", charaId, dressId, headId, controllerType);
 		replaceCharController(&charaId, &dressId, &headId, (UmaControllerType)controllerType);
 		return reinterpret_cast<decltype(CharacterBuildInfo_ctor_0_hook)*>(CharacterBuildInfo_ctor_0_orig)(_this, charaId, dressId, controllerType, headId, zekken, mobId, backDancerColorId, isUseDressDataHeadModelSubId, audienceId, motionDressId, isEnableModelCache);
 	}
@@ -374,7 +368,7 @@ namespace
 		int headId, int zekken, int mobId, int backDancerColorId, int overrideClothCategory,
 		bool isUseDressDataHeadModelSubId, int audienceId, int motionDressId, bool isEnableModelCache, int charaDressColorSetId)
 	{
-		if (enableLoadCharLog) printf("CharacterBuildInfo_ctor_1 cardId: %d, charaId: %d, dressId: %d, headId: %d, audienceId: %d, motionDressId: %d, controllerType: 0x%x\n", cardId, charaId, dressId, headId, audienceId, motionDressId, controllerType);
+		printf("CharacterBuildInfo_ctor_1 cardId: %d, charaId: %d, dressId: %d, headId: %d, audienceId: %d, motionDressId: %d, controllerType: 0x%x\n", cardId, charaId, dressId, headId, audienceId, motionDressId, controllerType);
 		replaceCharController(&charaId, &dressId, &headId, (UmaControllerType)controllerType);
 		return reinterpret_cast<decltype(CharacterBuildInfo_ctor_1_hook)*>(CharacterBuildInfo_ctor_1_orig)(_this, cardId, charaId, dressId, controllerType, headId, zekken, mobId, backDancerColorId, overrideClothCategory, isUseDressDataHeadModelSubId, audienceId, motionDressId, isEnableModelCache, charaDressColorSetId);
 	}
@@ -382,7 +376,7 @@ namespace
 
 	void* SingleModeSceneController_CreateModel_orig;
 	void* SingleModeSceneController_CreateModel_hook(void* _this, int cardId, int dressId, bool addVoiceCue) {
-		if (enableLoadCharLog) printf("SingleModeSceneController_CreateModel cardId: %d, dressId: %d\n", cardId, dressId);
+		printf("SingleModeSceneController_CreateModel cardId: %d, dressId: %d\n", cardId, dressId);
 		return reinterpret_cast<decltype(SingleModeSceneController_CreateModel_hook)*>(SingleModeSceneController_CreateModel_orig)(
 			_this, cardId, dressId, addVoiceCue);
 	}
@@ -442,7 +436,7 @@ namespace
 	int GetRaceDressId_hook(void* _this, bool isApplyDressChange) {
 		auto ret = reinterpret_cast<decltype(GetRaceDressId_hook)*>(GetRaceDressId_orig)(_this, false);
 		// printf("GetRaceDressId: %d, applyChange: %d\n", ret, isApplyDressChange);
-		if (g_enable_global_char_replace) {
+		if (config::g_enable_global_char_replace) {
 			if ((ret > 100000) && (ret <= 999999)) {
 				int charaId;
 				if (ret / 10000 == 90) {
@@ -463,7 +457,7 @@ namespace
 
 	void* EditableCharacterBuildInfo_ctor_orig;
 	void EditableCharacterBuildInfo_ctor_hook(void* _this, int cardId, int charaId, int dressId, int controllerType, int zekken, int mobId, int backDancerColorId, int headId, bool isUseDressDataHeadModelSubId, bool isEnableModelCache, int chara_dress_color_set_id) {
-		if (enableLoadCharLog) printf("EditableCharacterBuildInfo_ctor cardId: %d, charaId: %d, dressId: %d, headId: %d, controllerType: 0x%x\n", cardId, charaId, dressId, headId, controllerType);
+		printf("EditableCharacterBuildInfo_ctor cardId: %d, charaId: %d, dressId: %d, headId: %d, controllerType: 0x%x\n", cardId, charaId, dressId, headId, controllerType);
 		replaceCharController(&cardId, &charaId, &dressId, &headId, (UmaControllerType)controllerType);
 		return reinterpret_cast<decltype(EditableCharacterBuildInfo_ctor_hook)*>(EditableCharacterBuildInfo_ctor_orig)(_this, cardId, charaId, dressId, controllerType, zekken, mobId, backDancerColorId, headId, isUseDressDataHeadModelSubId, isEnableModelCache, chara_dress_color_set_id);
 	}

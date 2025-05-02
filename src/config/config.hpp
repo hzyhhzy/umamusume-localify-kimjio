@@ -126,6 +126,18 @@ namespace config
 	extern vector<wstring> external_dlls_path;
 	extern vector<wstring> dicts;
 
+
+	extern bool g_global_char_replace_Universal;
+	//extern bool enableLoadCharLog;
+	extern bool g_enable_home_char_replace;
+	extern bool g_enable_global_char_replace; //
+	extern bool g_enable_global_char_unsafe_replace; //often crashs
+	extern bool g_enable_global_special_chara_replace_training; //replace charaID>=2000 when UmaControllerType::Training, sometimes crashs
+	extern std::unordered_map<int, std::pair<int, int>> g_home_char_replace;
+	extern std::unordered_map<int, std::pair<int, int>> g_global_char_replace;
+	extern std::unordered_map<int, std::pair<int, int>> g_global_mini_char_replace;
+
+
 	extern WDocument config_document;
 	extern WDocument backup_document;
 

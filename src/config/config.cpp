@@ -76,6 +76,17 @@ namespace config
 	bool msgpack_notifier_print_error = false;
 	bool use_third_party_news = false;
 
+
+	bool g_global_char_replace_Universal = true;
+	bool g_enable_home_char_replace = true;
+	bool g_enable_global_char_replace = true; //
+	bool g_enable_global_char_unsafe_replace = false; //often crashs
+	bool g_enable_global_special_chara_replace_training = false; //replace charaID>=2000 when UmaControllerType::Training, sometimes crashs
+	std::unordered_map<int, std::pair<int, int>> g_home_char_replace;
+	std::unordered_map<int, std::pair<int, int>> g_global_char_replace;
+	std::unordered_map<int, std::pair<int, int>> g_global_mini_char_replace;
+
+
 	wstring text_id_dict;
 
 	rapidjson::Document code_map;
@@ -408,6 +419,65 @@ if (document.HasMember(L##_name_) && document[L##_name_].Is##_type_())\
 			GetValue("msgpackNotifierConnectionTimeoutMs", Int, msgpack_notifier_connection_timeout_ms);
 
 			GetValue("msgpackNotifierPrintError", Bool, msgpack_notifier_print_error);
+
+			GetValue("GlobalCharReplaceUniversal", Bool, g_global_char_replace_Universal);
+			GetValue("EnableHomeCharReplace", Bool, g_enable_home_char_replace);
+			GetValue("EnableGlobalCharReplace", Bool, g_enable_global_char_replace);
+			GetValue("EnableGlobalCharUnsafeReplace", Bool, g_enable_global_char_unsafe_replace);
+			GetValue("EnableGlobalSpecialCharaReplaceTraining", Bool, g_enable_global_special_chara_replace_training);
+
+			GetValue("HomeCharReplace", Array, auto array,
+				for (auto it = array.Begin(); it != array.End(); it++)
+				{
+					if (it->IsArray())
+					{
+						std::vector<int> v;
+						for(auto j = it->Begin(); j != it->End(); j++)
+						{ 
+							v.push_back(j->GetInt());
+						}
+						if (v.size() == 3)
+						{
+							g_home_char_replace.insert({ v[0], {v[1], v[2]} });
+						}
+					}
+				}
+					);
+
+
+			GetValue("GlobalCharReplace", Array, auto array,
+        printf("GlobalCharReplace\n");
+				for (auto it = array.Begin(); it != array.End(); it++)
+				{
+          printf("GlobalCharReplace loop\n");
+					if (it->IsArray())
+					{
+            auto array = it->GetArray();
+
+            if (array.Size() == 3)
+            {
+              std::vector<int> v;
+              for (auto j = array.Begin(); j != array.End(); j++)
+              {
+								v.push_back(j->GetInt());
+              }
+              if (v.size() == 3)
+              {
+                g_global_char_replace.insert({ v[0], {v[1], v[2]} });
+              }
+            }
+					}
+				}
+					);
+      if (g_global_char_replace.size() == 0)
+      {
+        g_enable_global_char_replace = false;
+      }
+      if (g_home_char_replace.size() == 0)
+      {
+        g_enable_home_char_replace = false;
+      }
+
 
 			GetValue("dicts", Array, auto array,
 				for (auto it = array.Begin(); it != array.End(); it++)
